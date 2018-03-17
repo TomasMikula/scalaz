@@ -1,49 +1,131 @@
 package scalaz
 package typeclass
 
-trait MonoidalCategory[=>:[_,_], x[_,_], I] {
-  def category: Category[=>:]
+trait MonoidalCategoryClass[=>:[_,_], x[_,_], I] extends CategoryClass[=>:] {
   def parallel[A, B, C, D](f: A =>: B, g: C =>: D): (A x C) =>: (B x D)
-  def assocLR[A, B, C](abc: (A x B) x C): A x (B x C)
-  def assocRL[A, B, C](abc: A x (B x C)): (A x B) x C
-  def addUnitL[A](a: A): I x A
-  def addUnitR[A](a: A): A x I
-  def elimUnitL[A](ia: I x A): A
-  def elimUnitR[A](ai: A x I): A
+  def assocLR[A, B, C]: ((A x B) x C) =>: (A x (B x C))
+  def assocRL[A, B, C]: (A x (B x C)) =>: ((A x B) x C)
+  def addUnitL[A]: A =>: (I x A)
+  def addUnitR[A]: A =>: (A x I)
+  def elimUnitL[A]: (I x A) =>: A
+  def elimUnitR[A]: (A x I) =>: A
 }
 
-trait CartesianMonoidalCategory[=>:[_,_], x[_,_], I] {
+trait BraidedMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends MonoidalCategoryClass[=>:, x, I] {
+  def twist[A, B]: (A x B) =>: (B x A)
+  def untwist[A, B]: (B x A) =>: (A x B)
+}
+
+trait SymmetricMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends BraidedMonoidalCategoryClass[=>:, x, I] {
+  def flip[A, B]: (A x B) =>: (B x A)
+
+  override def twist[A, B]: (A x B) =>: (B x A) = flip[A, B]
+  override def untwist[A, B]: (B x A) =>: (A x B) = flip[B, A]
+}
+
+trait CartesianMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends SymmetricMonoidalCategoryClass[=>:, x, I] {
   def prod[A, B, C](f: A =>: B, g: A =>: C): A =>: (B x C)
   def fst[A, B]: (A x B) =>: A
   def snd[A, B]: (A x B) =>: B
   def terminal[A]: A =>: I
+
+  override def parallel[A, B, C, D](f: A =>: B, g: C =>: D): (A x C) =>: (B x D) =
+    prod(compose(f, fst), compose(g, snd))
+
+  override def assocLR[A, B, C]: ((A x B) x C) =>: (A x (B x C)) =
+    prod(compose(fst[A, B], fst), prod(compose(snd[A, B], fst), snd))
+
+  override def assocRL[A, B, C]: (A x (B x C)) =>: ((A x B) x C) =
+    prod(prod(fst, compose(fst[B, C], snd)), compose(snd[B, C], snd))
+
+  override def addUnitL[A]: A =>: (I x A) = prod(terminal, id)
+
+  override def addUnitR[A]: A =>: (A x I) = prod(id, terminal)
+
+  override def elimUnitL[A]: (I x A) =>: A = snd
+
+  override def elimUnitR[A]: (A x I) =>: A = fst
+
+  override def flip[A, B]: (A x B) =>: (B x A) = prod(snd, fst)
 }
 
-trait ClosedMonoidalCategory[=>:[_,_], x[_,_], I, ->:[_,_]] {
-  def monoidalCategory: MonoidalCategory[=>:, x, I]
+trait ClosedMonoidalCategoryClass[=>:[_,_], x[_,_], I, ->:[_,_]] extends MonoidalCategoryClass[=>:, x, I] {
   def curry[A, B, C](f: (A x B) =>: C): A =>: (B ->: C)
   def eval[A, B]: ((A ->: B) x A) =>: B
 
   def uncurry[A, B, C](f: A =>: (B ->: C)): (A x B) =>: C =
-    monoidalCategory.category.compose.compose(eval[B, C], monoidalCategory.parallel(f, monoidalCategory.category.id[B]))
+    compose(eval[B, C], parallel(f, id[B]))
 }
 
-trait CartesianClosedCategory[=>:[_,_], x[_,_], I, ->:] {
+trait CartesianClosedCategoryClass[=>:[_,_], x[_,_], I, ->:[_, _]]
+  extends CartesianMonoidalCategoryClass[=>:, x, I]
+     with ClosedMonoidalCategoryClass[=>:, x, I, ->:] {
 }
 
-sealed trait FreeCCC[=>:[_,_], x[_,_], I, ->:[_,_], A, B]
+sealed trait FreeCCC[=>:[_,_], x[_,_], I, ->:[_,_], A, B] {
+  import data._
+
+  type Visitor[R] = FreeCCC.Visitor[=>:, x, I, ->:, A, B, R]
+
+  def visit[R](v: Visitor[R]): R
+
+  final def andThen[C](f: FreeCCC[=>:, x, I, ->:, B, C]): FreeCCC[=>:, x, I, ->:, A, C] =
+    FreeCCC.Sequence(this :: AList1(f))
+
+  final def compose[Z](f: FreeCCC[=>:, x, I, ->:, Z, A]): FreeCCC[=>:, x, I, ->:, Z, B] =
+    FreeCCC.Sequence(f :: AList1(this))
+}
+
 object FreeCCC {
-  import data.AList1
+  import data._
 
-  case class Wrap[=>:[_,_], x[_,_], I, ->:[_,_], A, B](f: A =>: B) extends FreeCCC[=>:, x, I, ->:, A, B]
-  case class Sequence[=>:[_,_], x[_,_], I, ->:[_,_], A, B](fs: AList1[FreeCCC[=>:, x, I, ->:, ?, ?], A, B]) extends FreeCCC[=>:, x, I, ->:, A, B]
-  case class Id[=>:[_,_], x[_,_], I, ->:[_,_], A]() extends FreeCCC[=>:, x, I, ->:, A, A]
-  case class Fst[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, A x B, A]
-  case class Snd[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, A x B, B]
-  case class Prod[=>:[_,_], x[_,_], I, ->:[_,_], A, B, C](f: FreeCCC[=>:, x, I, ->:, A, B], g: FreeCCC[=>:, x, I, ->:, A, C]) extends FreeCCC[=>:, x, I, ->:, A, B x C]
-  case class Const[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, A, B ->: A]
-  case class Curry[=>:[_,_], x[_,_], I, ->:[_,_], A, B, C](f: FreeCCC[=>:, x, I, ->:, A x B, C]) extends FreeCCC[=>:, x, I, ->:, A, B ->: C]
-  case class Eval[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, (A ->: B) x A, B]
+  case class Wrap[=>:[_,_], x[_,_], I, ->:[_,_], A, B](f: A =>: B) extends FreeCCC[=>:, x, I, ->:, A, B] {
+    def visit[R](v: Visitor[R]): R = v.caseWrap(f)
+  }
+  case class Sequence[=>:[_,_], x[_,_], I, ->:[_,_], A, B](fs: AList1[FreeCCC[=>:, x, I, ->:, ?, ?], A, B]) extends FreeCCC[=>:, x, I, ->:, A, B] {
+    private type ==>[X, Y] = FreeCCC[=>:, x, I, ->:, X, Y]
+    private def id[X](): X ==> X = Id()
+
+    def split: APair[A ==> ?, ? ==> B] = fs.tail match {
+      case ev @ ANil() => APair.of[A ==> ?, ? ==> B](fs.head, ev.subst[fs.Pivot ==> ?](id[fs.Pivot]()))
+      case ACons(h, t) => APair.of[A ==> ?, ? ==> B](fs.head, Sequence(ACons1(h, t)))
+    }
+
+    def visit[R](v: Visitor[R]): R = v.caseSequence(fs)
+  }
+  case class Id[=>:[_,_], x[_,_], I, ->:[_,_], A]() extends FreeCCC[=>:, x, I, ->:, A, A] {
+    def visit[R](v: Visitor[R]): R = v.caseId()
+  }
+  case class Fst[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, A x B, A] {
+    def visit[R](v: Visitor[R]): R = v.caseFst[B]()
+  }
+  case class Snd[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, A x B, B] {
+    def visit[R](v: Visitor[R]): R = v.caseSnd[A]()
+  }
+  case class Prod[=>:[_,_], x[_,_], I, ->:[_,_], A, B, C](f: FreeCCC[=>:, x, I, ->:, A, B], g: FreeCCC[=>:, x, I, ->:, A, C]) extends FreeCCC[=>:, x, I, ->:, A, B x C] {
+    def visit[R](v: Visitor[R]): R = v.caseProd(f, g)
+  }
+  case class Terminal[=>:[_,_], x[_,_], I, ->:[_,_], A]() extends FreeCCC[=>:, x, I, ->:, A, I] {
+    def visit[R](v: Visitor[R]): R = v.caseTerminal()
+  }
+  case class Curry[=>:[_,_], x[_,_], I, ->:[_,_], A, B, C](f: FreeCCC[=>:, x, I, ->:, A x B, C]) extends FreeCCC[=>:, x, I, ->:, A, B ->: C] {
+    def visit[R](v: Visitor[R]): R = v.caseCurry(f)
+  }
+  case class Eval[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, (A ->: B) x A, B] {
+    def visit[R](v: Visitor[R]): R = v.caseEval[A]()
+  }
+
+  trait Visitor[=>:[_,_], x[_,_], I, ->:[_,_], A, B, R] {
+    def caseWrap(f: A =>: B): R
+    def caseSequence(fs: AList1[FreeCCC[=>:, x, I, ->:, ?, ?], A, B]): R
+    def caseId()(implicit ev: A === B): R
+    def caseFst[A2]()(implicit ev: A === (B x A2)): R
+    def caseSnd[A1]()(implicit ev: A === (A1 x B)): R
+    def caseProd[B1, B2](f: FreeCCC[=>:, x, I, ->:, A, B1], g: FreeCCC[=>:, x, I, ->:, A, B2])(implicit ev: (B1 x B2) === B): R
+    def caseTerminal()(implicit ev: I === B): R
+    def caseCurry[B1, B2](f: FreeCCC[=>:, x, I, ->:, A x B1, B2])(implicit ev: (B1 ->: B2) === B): R
+    def caseEval[A0]()(implicit ev: A === ((A0 ->: B) x A0)): R
+  }
 }
 
 sealed trait SuperFreeCCC[=>:[_,_], A, B] {
@@ -58,69 +140,94 @@ object FunImpl extends FunModule {
   type Fun[A, B] = FreeCCC[Function1, Tuple2, Unit, Function1, A, B]
 }
 
-sealed trait RecFun[A, B] {
-  def apply(a: A): B = RecFun.eval(this, a)
+trait RecFunModule {
+  type RecFun[A, B]
+
+  def eval[A, B](f: RecFun[A, B], a: A): B
 }
 
-object RecFun {
+private[typeclass] object RecFunImpl extends RecFunModule {
   import scalaz.data._
 
+  trait AFixModule {
+    type AFix[F[_[_, _], _, _], A, B]
+
+    def fix  [F[_[_, _], _, _], A, B](f: F[RecFunImpl.AFix[F, ?, ?], A, B]):          AFix[F, A, B]
+    def unfix[F[_[_, _], _, _], A, B](f:          AFix[F, A, B]       ): F[RecFunImpl.AFix[F, ?, ?], A, B]
+  }
+
+  object AFixImpl extends AFixModule {
+    type AFix[F[_[_, _], _, _], A, B] = F[RecFunImpl.AFix[F, ?, ?], A, B]
+
+    def fix  [F[_[_, _], _, _], A, B](f: F[RecFunImpl.AFix[F, ?, ?], A, B]):          AFix[F, A, B]        = f
+    def unfix[F[_[_, _], _, _], A, B](f:          AFix[F, A, B]       ): F[RecFunImpl.AFix[F, ?, ?], A, B] = f
+  }
+
+  val AFix: AFixModule = AFixImpl
+  type AFix[F[_[_, _], _, _], A, B] = AFix.AFix[F, A, B]
+
   type Fun[A, B] = FreeCCC[Function1, Tuple2, Unit, Function1, A, B]
+
+  type Rec[=>:[_,_], A, B] = A =>: (A =>: B) =>: B
+
+  type RecFunF[F[_,_], α, β] = FreeCCC[λ[(a, b) => Function1[a, b] \/ Rec[F, a, b]], Tuple2, Unit, F, α, β]
+  type RecFun[A, B] = AFix[RecFunF, A, B]
   type =>:[A, B] = RecFun[A, B]
+  type ->[A, B] = Function1[A, B] \/ Rec[RecFun, A, B]
+  type ==>:[A, B] = FreeCCC[->, Tuple2, Unit, RecFun, A, B]
 
-  case class WrapFun[A, B](f: Fun[A, B]) extends RecFun[A, B]
-  case class Rec[A, B](f: A =>: (A =>: B) =>: B) extends RecFun[A, B]
+  def fix[A, B](f: A ==>: B): A =>: B = AFix.fix[RecFunF, A, B](f)
+  def unfix[A, B](f: A =>: B): A ==>: B = AFix.unfix[RecFunF, A, B](f)
 
-  private[RecFun] def eval[A, B](f: A =>: B, a: A): B =
-    evalStack(a, compile(f))
+  def eval[A, B](f: A =>: B, a: A): B =
+    EvalApp(a, f, Done[B](_)).run
 
-  private def compile[A, B](f: A =>: B): InstList[A, B] = f match {
-    case WrapFun(g) => g match {
-      case _ => ???
+  private sealed trait Evaluator[R] {
+    final def run: R = Evaluator.run(this)
+  }
+
+  private case class Done[R](r: R) extends Evaluator[R]
+  private case class FlatMap[A, B](a: Evaluator[A], f: A => Evaluator[B]) extends Evaluator[B]
+  private case class EvalApp[A, B, R](a: A, φ: A =>: B, f: B => Evaluator[R]) extends Evaluator[R] {
+    def step: Evaluator[R] = {
+      val φ1 = AFix.unfix(φ)
+      φ1.visit(new φ1.Visitor[Evaluator[R]] {
+        import FreeCCC._
+
+        override def caseWrap(ψ: A -> B) = ψ match {
+          case -\/(g) => f(g(a))
+          case \/-(ξ) => EvalApp[A, (A =>: B) =>: B, R](a, ξ, γ => EvalApp(φ, γ, f))
+        }
+        override def caseId()(implicit ev: A === B) = f(ev(a))
+        override def caseFst[A2]()(implicit ev: A === (B, A2)) = f(ev(a)._1)
+        override def caseSnd[A1]()(implicit ev: A === (A1, B)) = f(ev(a)._2)
+        override def caseTerminal()(implicit ev: Unit === B) = f(ev(()))
+        override def caseProd[B1, B2](σ: A ==>: B1, τ: A ==>: B2)(implicit ev: (B1, B2) === B) =
+          EvalApp[A, B1, R](a, fix(σ), b1 => EvalApp[A, B2, R](a, fix(τ), b2 => f(ev((b1, b2)))))
+        override def caseCurry[B1, B2](ψ: (A, B1) ==>: B2)(implicit ev: (B1 =>: B2) === B) =
+          f(ev(fix(ψ compose Wrap[->, Tuple2, Unit, RecFun, B1, (A, B1)](-\/(b1 => (a, b1))))))
+        override def caseEval[A0]()(implicit ev: A === (A0 =>: B, A0)) = {
+          val (g, a0) = ev(a)
+          EvalApp(a0, g, f)
+        }
+        override def caseSequence(φs: AList1[==>:, A, B]) = φs.tail match {
+          case ev @ ANil() => EvalApp(a, fix(ev.subst[A ==>: ?](φs.head)), f)
+          case ACons(h, t) => EvalApp(a, fix(φs.head), (x: φs.Pivot) => EvalApp(x, fix(Sequence(ACons1(h, t))), f))
+        }
+      })
     }
-    case Rec(g) => Put(f) :: Swap() ::: compile(g) :: Load(???) :: AList.empty
   }
 
-  @annotation.tailrec
-  private def evalStack[L, R](l: L, is: InstList[L, R]): R =
-    is match {
-      case ev @ ANil() => ev.leibniz(l)
-      case ACons(i, is) => i(l) match {
-        case \/-(r) => r
-        case -\/(p) => evalStack(p._1, p._2 ::: is)
+  private object Evaluator {
+    @annotation.tailrec
+    final def run[R](e: Evaluator[R]): R = e match {
+      case Done(r) => r
+      case FlatMap(a, f) => a match {
+        case Done(a) => run(f(a))
+        case FlatMap(a, g) => run(FlatMap(a, g andThen f))
+        case EvalApp(a, φ, g) => run(EvalApp(a, φ, g andThen f))
       }
-        case TransformTop(f) => evalStack( (f(l._1), l._2)            , is )
-        case Put(a)          => evalStack( (a, l)                     , is )
-        case Merge()         => evalStack( ((l._1, l._2._1), l._2._2) , is )
-        case Unmerge()       => evalStack( (l._1._1, (l._1._2, l._2)) , is )
-        case Swap()          => evalStack( (l._2._1, (l._1, l._2._2)) , is )
-        case Load(f)         =>
-          val (x, js) = f(l) ;  evalStack( x, js ::: is )
-      }
+      case e @ EvalApp(_, _, _) => run(e.step)
     }
-
-  sealed trait Inst[L, R] {
-    def apply(l: L) : APair[Id, InstList[?, R]] \/ R
   }
-
-  case class TransformTop[A, T, B, R](f: A => B) extends Inst[(A, T), (B, T)] {
-    def apply(l: L) : APair[Id, InstList[?, R]] \/ R = 
-  }
-  case class Put[A, T](a: A) extends Inst[T, (A, T)] {
-    def apply(l: L) : APair[Id, InstList[?, R]] \/ R
-  }
-  case class Merge[A, B, T]() extends Inst[(A, (B, T)), ((A, B), T)] {
-    def apply(l: L) : APair[Id, InstList[?, R]] \/ R
-  }
-  case class Unmerge[A, B, T]() extends Inst[((A, B), T), (A, (B, T))] {
-    def apply(l: L) : APair[Id, InstList[?, R]] \/ R
-  }
-  case class Swap[A, B, T]() extends Inst[(A, (B, T)), (B, (A, T))] {
-    def apply(l: L) : APair[Id, InstList[?, R]] \/ R
-  }
-  case class Load[A, B, R](load: A => (B, InstList[B, R])) extends Inst[A, R] {
-    def apply(l: L) : APair[Id, InstList[?, R]] \/ R
-  }
-
-  type InstList[A, B] = AList[Inst, A, B]
 }
