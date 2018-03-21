@@ -9,11 +9,51 @@ trait MonoidalCategoryClass[=>:[_,_], x[_,_], I] extends CategoryClass[=>:] {
   def addUnitR[A]: A =>: (A x I)
   def elimUnitL[A]: (I x A) =>: A
   def elimUnitR[A]: (A x I) =>: A
+
+  override def dual: MonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] =
+    new MonoidalCategoryClass.Dual[=>:, x, I] {
+      def primal = MonoidalCategoryClass.this
+    }
+}
+
+object MonoidalCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I]
+  extends CategoryClass.Dual[=>:]
+  with MonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] {
+    override def primal: MonoidalCategoryClass[=>:, x, I]
+    override def dual = primal
+
+    def addUnitL[A]: (I x A) =>: A = primal.elimUnitL
+    def addUnitR[A]: (A x I) =>: A = primal.elimUnitR
+    def assocLR[A, B, C]: (A x (B x C)) =>: ((A x B) x C) = primal.assocRL
+    def assocRL[A, B, C]: ((A x B) x C) =>: (A x (B x C)) = primal.assocLR
+    def elimUnitL[A]: A =>: (I x A) = primal.addUnitL
+    def elimUnitR[A]: A =>: (A x I) = primal.addUnitR
+    def parallel[A, B, C, D](f: B =>: A, g: D =>: C): (B x D) =>: (A x C) = primal.parallel(f, g)
+  }
 }
 
 trait BraidedMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends MonoidalCategoryClass[=>:, x, I] {
   def twist[A, B]: (A x B) =>: (B x A)
   def untwist[A, B]: (B x A) =>: (A x B)
+
+  override def dual: BraidedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] =
+    new BraidedMonoidalCategoryClass.Dual[=>:, x, I] {
+      def primal = BraidedMonoidalCategoryClass.this
+    }
+}
+
+object BraidedMonoidalCategoryClass {
+  trait Dual[=>:[_,_], x[_,_], I]
+  extends MonoidalCategoryClass.Dual[=>:, x, I]
+  with BraidedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] {
+    override def primal: BraidedMonoidalCategoryClass[=>:, x, I]
+    override def dual = primal
+
+    def twist[A, B]: (B x A) =>: (A x B) = primal.untwist
+    def untwist[A, B]: (A x B) =>: (B x A) = primal.twist
+  }
 }
 
 trait SymmetricMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends BraidedMonoidalCategoryClass[=>:, x, I] {
@@ -21,32 +61,23 @@ trait SymmetricMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends BraidedMonoida
 
   override def twist[A, B]: (A x B) =>: (B x A) = flip[A, B]
   override def untwist[A, B]: (B x A) =>: (A x B) = flip[B, A]
+
+  override def dual: SymmetricMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] =
+    new SymmetricMonoidalCategoryClass.Dual[=>:, x, I] {
+      def primal = SymmetricMonoidalCategoryClass.this
+    }
 }
 
-trait CartesianMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends SymmetricMonoidalCategoryClass[=>:, x, I] {
-  def prod[A, B, C](f: A =>: B, g: A =>: C): A =>: (B x C)
-  def fst[A, B]: (A x B) =>: A
-  def snd[A, B]: (A x B) =>: B
-  def terminal[A]: A =>: I
+object SymmetricMonoidalCategoryClass {
 
-  override def parallel[A, B, C, D](f: A =>: B, g: C =>: D): (A x C) =>: (B x D) =
-    prod(compose(f, fst), compose(g, snd))
+  trait Dual[=>:[_,_], x[_,_], I]
+  extends BraidedMonoidalCategoryClass.Dual[=>:, x, I]
+  with SymmetricMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] {
+    override def primal: SymmetricMonoidalCategoryClass[=>:, x, I]
+    override def dual = primal
 
-  override def assocLR[A, B, C]: ((A x B) x C) =>: (A x (B x C)) =
-    prod(compose(fst[A, B], fst), prod(compose(snd[A, B], fst), snd))
-
-  override def assocRL[A, B, C]: (A x (B x C)) =>: ((A x B) x C) =
-    prod(prod(fst, compose(fst[B, C], snd)), compose(snd[B, C], snd))
-
-  override def addUnitL[A]: A =>: (I x A) = prod(terminal, id)
-
-  override def addUnitR[A]: A =>: (A x I) = prod(id, terminal)
-
-  override def elimUnitL[A]: (I x A) =>: A = snd
-
-  override def elimUnitR[A]: (A x I) =>: A = fst
-
-  override def flip[A, B]: (A x B) =>: (B x A) = prod(snd, fst)
+    def flip[A, B]: (B x A) =>: (A x B) = primal.flip
+  }
 }
 
 trait ClosedMonoidalCategoryClass[=>:[_,_], x[_,_], I, ->:[_,_]] extends MonoidalCategoryClass[=>:, x, I] {
@@ -55,179 +86,511 @@ trait ClosedMonoidalCategoryClass[=>:[_,_], x[_,_], I, ->:[_,_]] extends Monoida
 
   def uncurry[A, B, C](f: A =>: (B ->: C)): (A x B) =>: C =
     compose(eval[B, C], parallel(f, id[B]))
+
+  override def dual: CoclosedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I, ->:] =
+    new ClosedMonoidalCategoryClass.Dual[=>:, x, I, ->:] {
+      def primal = ClosedMonoidalCategoryClass.this
+    }
 }
 
+object ClosedMonoidalCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, ->:[_,_]]
+  extends MonoidalCategoryClass.Dual[=>:, x, I]
+  with CoclosedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I, ->:] {
+    override def primal: ClosedMonoidalCategoryClass[=>:, x, I, ->:]
+    override def dual = primal
+
+    def cocurry[A, B, C](f: (A x B) =>: C): A =>: B ->: C = primal.curry(f)
+    def coeval[A, B]: ((A ->: B) x A) =>: B = primal.eval
+  }
+}
+
+trait CoclosedMonoidalCategoryClass[=>:[_,_], v[_,_], O, <-:[_,_]] extends MonoidalCategoryClass[=>:, v, O] {
+  def cocurry[A, B, C](f: C =>: (A v B)): (B <-: C) =>: A
+  def coeval[A, B]: B =>: ((A <-: B) v A)
+
+  def councurry[A, B, C](f: (B <-: C) =>: A): C =>: (A v B) =
+    andThen(coeval[B, C], parallel(f, id[B]))
+
+  override def dual: ClosedMonoidalCategoryClass[λ[(a, b) => b =>: a], v, O, <-:] =
+    new CoclosedMonoidalCategoryClass.Dual[=>:, v, O, <-:] {
+      def primal = CoclosedMonoidalCategoryClass.this
+    }
+}
+
+object CoclosedMonoidalCategoryClass {
+
+  trait Dual[=>:[_,_], v[_,_], O, <-:[_,_]]
+  extends MonoidalCategoryClass.Dual[=>:, v, O]
+  with ClosedMonoidalCategoryClass[λ[(a, b) => b =>: a], v, O, <-:] {
+    override def primal: CoclosedMonoidalCategoryClass[=>:, v, O, <-:]
+    override def dual = primal
+
+    def curry[A, B, C](f: C =>: (A v B)): (B <-: C) =>: A = primal.cocurry(f)
+    def eval[A, B]: B =>: ((A <-: B) v A) = primal.coeval
+  }
+}
+
+trait TracedMonoidalCategoryClass[=>:[_,_], x[_,_], I] extends SymmetricMonoidalCategoryClass[=>:, x, I] {
+  def tr[X, A, B](f: (A x X) =>: (B x X)): A =>: B
+
+  override def dual: TracedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] =
+    new TracedMonoidalCategoryClass.Dual[=>:, x, I] {
+      def primal = TracedMonoidalCategoryClass.this
+    }
+}
+
+object TracedMonoidalCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I]
+  extends SymmetricMonoidalCategoryClass.Dual[=>:, x, I]
+  with TracedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I] {
+    override def primal: TracedMonoidalCategoryClass[=>:, x, I]
+    override def dual = primal
+
+    def tr[X, A, B](f: (B x X) =>: (A x X)): B =>: A = primal.tr(f)
+  }
+}
+
+/** Category with looping only at types that satisfy the constraint `P`. */
+trait ConstrTracedMonoidalCategoryClass[=>:[_,_], x[_,_], I, P[_]] extends SymmetricMonoidalCategoryClass[=>:, x, I] {
+  def tr[X: P, A, B](f: (A x X) =>: (B x X)): A =>: B
+
+  override def dual: ConstrTracedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I, P] =
+    new ConstrTracedMonoidalCategoryClass.Dual[=>:, x, I, P] {
+      def primal = ConstrTracedMonoidalCategoryClass.this
+    }
+}
+
+object ConstrTracedMonoidalCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, P[_]]
+  extends SymmetricMonoidalCategoryClass.Dual[=>:, x, I]
+     with ConstrTracedMonoidalCategoryClass[λ[(a, b) => b =>: a], x, I, P] {
+
+    override def primal: ConstrTracedMonoidalCategoryClass[=>:, x, I, P]
+    override def dual = primal
+
+    def tr[X: P, A, B](f: x[B,X] =>: x[A,X]): B =>: A = primal.tr(f)
+  }
+}
+
+/** Category with finite products. */
+trait CartesianCategoryClass[=>:[_,_], x[_,_], I] extends CategoryClass[=>:] {
+  def prod[A, B, C](f: A =>: B, g: A =>: C): A =>: (B x C)
+  def fst[A, B]: (A x B) =>: A
+  def snd[A, B]: (A x B) =>: B
+  def terminal[A]: A =>: I
+
+  def times[A, B, C, D](f: A =>: B, g: C =>: D): (A x C) =>: (B x D) =
+    prod(compose(f, fst), compose(g, snd))
+
+  /** Returns the monoidal structure of categorical product.
+    * This class does not extend [[SymmetricMonoidalCategoryClass]] directly,
+    * because it is common for a subclass to have multiple monoidal structures.
+    */
+  def productMonoidalStructure: SymmetricMonoidalCategoryClass[=>:, x, I] =
+    new MonoidalFromCartesian(this)
+
+  override def dual: CocartesianCategoryClass[λ[(a, b) => b =>: a], x, I] =
+    new CartesianCategoryClass.Dual[=>:, x, I] {
+      def primal = CartesianCategoryClass.this
+    }
+}
+
+object CartesianCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I]
+  extends CategoryClass.Dual[=>:]
+  with CocartesianCategoryClass[λ[(a, b) => b =>: a], x, I] {
+    override def primal: CartesianCategoryClass[=>:, x, I]
+    override def dual = primal
+
+    def sum[A, B, C](f: C =>: A, g: C =>: B): C =>: (A x B) = primal.prod(f, g)
+    def inl[A, B]: (A x B) =>: A = primal.fst
+    def inr[A, B]: (A x B) =>: B = primal.snd
+    def initial[A]: A =>: I = primal.terminal
+  }
+}
+
+class MonoidalFromCartesian[=>:[_,_], x[_,_], I](C: CartesianCategoryClass[=>:, x, I])
+extends SymmetricMonoidalCategoryClass[=>:, x, I] {
+  override def compose[A, B, C](f: B =>: C, g: A =>: B): A =>: C = C.compose(f, g)
+
+  override def id[A]: A =>: A = C.id[A]
+
+  override def parallel[A, B, C, D](f: A =>: B, g: C =>: D): (A x C) =>: (B x D) = C.times(f, g)
+
+  override def assocLR[A, B, C]: ((A x B) x C) =>: (A x (B x C)) =
+    C.prod(compose(C.fst[A, B], C.fst), C.prod(compose(C.snd[A, B], C.fst), C.snd))
+
+  override def assocRL[A, B, C]: (A x (B x C)) =>: ((A x B) x C) =
+    C.prod(C.prod(C.fst, compose(C.fst[B, C], C.snd)), compose(C.snd[B, C], C.snd))
+
+  override def addUnitL[A]: A =>: (I x A) = C.prod(C.terminal, id)
+
+  override def addUnitR[A]: A =>: (A x I) = C.prod(id, C.terminal)
+
+  override def elimUnitL[A]: (I x A) =>: A = C.snd
+
+  override def elimUnitR[A]: (A x I) =>: A = C.fst
+
+  override def flip[A, B]: (A x B) =>: (B x A) = C.prod(C.snd, C.fst)
+}
+
+/** Category with finite products and a parameterized fixed point operator. */
+trait PFixCategoryClass[=>:[_,_], x[_,_], I] extends CartesianCategoryClass[=>:, x, I] {
+  /** Parameterized fixed-point operator. */
+  def pfix[A, X](f: (A x X) =>: X): A =>: X
+
+  /** Parameterized fixed point operator in a cartesian monoidal category
+    * is equivalent to a trace.
+    */
+  def pfixTr[X, A, B](f: (A x X) =>: (B x X)): A =>: B =
+    andThen(andThen(prod(id[A], pfix[A, X](andThen(f, snd[B, X]))), f), fst[B, X])
+
+  /** Traced structure given by the parameterized fixed point operator. */
+  def pfixTrace: TracedMonoidalCategoryClass[=>:, x, I] =
+    new TracedFromPFix(this)
+
+  override def dual: WhileCategoryClass[λ[(a, b) => b =>: a], x, I] =
+    new PFixCategoryClass.Dual[=>:, x, I] {
+      def primal = PFixCategoryClass.this
+    }
+}
+
+object PFixCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I]
+  extends CartesianCategoryClass.Dual[=>:, x, I]
+  with WhileCategoryClass[λ[(a, b) => b =>: a], x, I] {
+    override def primal: PFixCategoryClass[=>:, x, I]
+    override def dual = primal
+
+    def doWhile[X, A](f: (A x X) =>: X): A =>: X = primal.pfix(f)
+  }
+}
+
+class TracedFromPFix[=>:[_,_], x[_,_], I](C: PFixCategoryClass[=>:, x, I])
+extends MonoidalFromCartesian[=>:, x, I](C) with TracedMonoidalCategoryClass[=>:, x, I] {
+  def tr[X, A, B](f: (A x X) =>: (B x X)): A =>: B = C.pfixTr(f)
+}
+
+/** Category with parameterized fixed point only at types that satisfy the constraint `P`. */
+trait ConstrPFixCategoryClass[=>:[_,_], x[_,_], I, P[_]] extends CartesianCategoryClass[=>:, x, I] {
+  /** Parameterized fixed-point operator. */
+  def pfix[A, X: P](f: (A x X) =>: X): A =>: X
+
+  def pfixTr[X: P, A, B](f: (A x X) =>: (B x X)): A =>: B =
+    andThen(andThen(prod(id[A], pfix[A, X](andThen(f, snd[B, X]))), f), fst[B, X])
+}
+
+/** Category with finite coproducts. */
+trait CocartesianCategoryClass[=>:[_,_], v[_,_], O] extends CategoryClass[=>:] {
+  def sum[A, B, C](f: A =>: C, g: B =>: C): (A v B) =>: C
+  def inl[A, B]: A =>: (A v B)
+  def inr[A, B]: B =>: (A v B)
+  def initial[A]: O =>: A
+
+  def plus[A, B, C, D](f: A =>: B, g: C =>: D): (A v C) =>: (B v D) =
+    sum(compose(inl, f), compose(inr, g))
+
+  /** Returns the monoidal structure of categorical coproduct.
+    * This class does not extend [[SymmetricMonoidalCategoryClass]] directly,
+    * because it is common for a subclass to have multiple monoidal structures.
+    */
+  def coproductMonoidalStructure: SymmetricMonoidalCategoryClass[=>:, v, O] =
+    new MonoidalFromCocartesian(this)
+
+  override def dual: CartesianCategoryClass[λ[(a, b) => b =>: a], v, O] =
+    new CocartesianCategoryClass.Dual[=>:, v, O] {
+      def primal = CocartesianCategoryClass.this
+    }
+}
+
+object CocartesianCategoryClass {
+
+  trait Dual[=>:[_,_], v[_,_], O]
+  extends CategoryClass.Dual[=>:]
+  with CartesianCategoryClass[λ[(a, b) => b =>: a], v, O] {
+    override def primal: CocartesianCategoryClass[=>:, v, O]
+    override def dual = primal
+
+    def prod[A, B, C](f: B =>: A, g: C =>: A): (B v C) =>: A = primal.sum(f, g)
+    def fst[A, B]: A =>: (A v B) = primal.inl
+    def snd[A, B]: B =>: (A v B) = primal.inr
+    def terminal[A]: O =>: A = primal.initial
+  }
+}
+
+class MonoidalFromCocartesian[=>:[_,_], v[_,_], O](C: CocartesianCategoryClass[=>:, v, O])
+extends SymmetricMonoidalCategoryClass[=>:, v, O] {
+  override def compose[A, B, C](f: B =>: C, g: A =>: B): A =>: C = C.compose(f, g)
+
+  override def id[A]: A =>: A = C.id[A]
+
+  override def parallel[A, B, C, D](f: A =>: B, g: C =>: D): (A v C) =>: (B v D) = C.plus(f, g)
+
+  override def assocLR[A, B, C]: ((A v B) v C) =>: (A v (B v C)) =
+    C.sum(C.sum(C.inl, compose(C.inr, C.inl[B, C])), compose(C.inr, C.inr[B, C]))
+
+  override def assocRL[A, B, C]: (A v (B v C)) =>: ((A v B) v C) =
+    C.sum(compose(C.inl, C.inl[A, B]), C.sum(compose(C.inl, C.inr[A, B]), C.inr))
+
+  override def addUnitL[A]: A =>: (O v A) = C.inr
+
+  override def addUnitR[A]: A =>: (A v O) = C.inl
+
+  override def elimUnitL[A]: (O v A) =>: A = C.sum(C.initial, id)
+
+  override def elimUnitR[A]: (A v O) =>: A = C.sum(id, C.initial)
+
+  override def flip[A, B]: (A v B) =>: (B v A) = C.sum(C.inr, C.inl)
+}
+
+/** Category with finite coproducts and a "do-while loop". */
+trait WhileCategoryClass[=>:[_,_], v[_,_], O] extends CocartesianCategoryClass[=>:, v, O] {
+  /** Returns a "function" that keeps applying `f` while the result is `X`
+    * and stops when the result is `A`.
+    */
+  def doWhile[X, A](f: X =>: (A v X)): X =>: A
+
+  /** do-while in a cocartesian monoidal category is equivalent to a trace.  */
+  def whileTr[X, A, B](f: (A v X) =>: (B v X)): A =>: B =
+    andThen(inl[A, X], doWhile[A v X, B](andThen(f, plus(id[B], inr[A, X]))))
+
+  /** Traced structure given by the do-while loop. */
+  def whileTrace: TracedMonoidalCategoryClass[=>:, v, O] =
+    new TracedFromWhile(this)
+
+  override def dual: PFixCategoryClass[λ[(a, b) => b =>: a], v, O] =
+    new WhileCategoryClass.Dual[=>:, v, O] {
+      def primal = WhileCategoryClass.this
+    }
+}
+
+object WhileCategoryClass {
+
+  trait Dual[=>:[_,_], v[_,_], O]
+  extends CocartesianCategoryClass.Dual[=>:, v, O]
+  with PFixCategoryClass[λ[(a, b) => b =>: a], v, O] {
+    override def primal: WhileCategoryClass[=>:, v, O]
+    override def dual = primal
+
+    def pfix[A, X](f: X =>: (A v X)): X =>: A = primal.doWhile(f)
+  }
+}
+
+class TracedFromWhile[=>:[_,_], v[_,_], O](C: WhileCategoryClass[=>:, v, O])
+extends MonoidalFromCocartesian[=>:, v, O](C) with TracedMonoidalCategoryClass[=>:, v, O] {
+  def tr[X, A, B](f: (A v X) =>: (B v X)): A =>: B = C.whileTr(f)
+}
+
+/** Category with finite products and finite coproducts. */
+trait BiCartesianCategoryClass[=>:[_,_], x[_,_], I, v[_,_], O]
+  extends CartesianCategoryClass[=>:, x, I]
+     with CocartesianCategoryClass[=>:, v, O] {
+
+  override def dual: BiCartesianCategoryClass[λ[(a, b) => b =>: a], v, O, x, I] =
+    new BiCartesianCategoryClass.Dual[=>:, x, I, v, O] {
+      def primal = BiCartesianCategoryClass.this
+    }
+}
+
+object BiCartesianCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, v[_,_], O]
+  extends CartesianCategoryClass.Dual[=>:, x, I]
+     with CocartesianCategoryClass.Dual[=>:, v, O]
+     with BiCartesianCategoryClass[λ[(a, b) => b =>: a], v, O, x, I] {
+    override def primal: BiCartesianCategoryClass[=>:, x, I, v, O]
+    override def dual = primal
+  }
+}
+
+/** Category with finite products and exponentials ("higher-order functions"). */
 trait CartesianClosedCategoryClass[=>:[_,_], x[_,_], I, ->:[_, _]]
-  extends CartesianMonoidalCategoryClass[=>:, x, I]
-     with ClosedMonoidalCategoryClass[=>:, x, I, ->:] {
+  extends CartesianCategoryClass[=>:, x, I]
+     with ClosedMonoidalCategoryClass[=>:, x, I, ->:]
+     with SymmetricMonoidalCategoryClass[=>:, x, I] {
+
+  override def productMonoidalStructure = this
+  override def dual: CocartesianCoclosedCategoryClass[λ[(a, b) => b =>: a], x, I, ->:] =
+    new CartesianClosedCategoryClass.Dual[=>:, x, I, ->:] {
+      def primal = CartesianClosedCategoryClass.this
+    }
 }
 
-sealed trait FreeCCC[=>:[_,_], x[_,_], I, ->:[_,_], A, B] {
-  import data._
+object CartesianClosedCategoryClass {
 
-  type Visitor[R] = FreeCCC.Visitor[=>:, x, I, ->:, A, B, R]
-
-  def visit[R](v: Visitor[R]): R
-
-  final def andThen[C](f: FreeCCC[=>:, x, I, ->:, B, C]): FreeCCC[=>:, x, I, ->:, A, C] =
-    FreeCCC.Sequence(this :: AList1(f))
-
-  final def compose[Z](f: FreeCCC[=>:, x, I, ->:, Z, A]): FreeCCC[=>:, x, I, ->:, Z, B] =
-    FreeCCC.Sequence(f :: AList1(this))
-}
-
-object FreeCCC {
-  import data._
-
-  case class Wrap[=>:[_,_], x[_,_], I, ->:[_,_], A, B](f: A =>: B) extends FreeCCC[=>:, x, I, ->:, A, B] {
-    def visit[R](v: Visitor[R]): R = v.caseWrap(f)
+  trait Dual[=>:[_,_], x[_,_], I, ->:[_, _]]
+  extends CartesianCategoryClass.Dual[=>:, x, I]
+     with ClosedMonoidalCategoryClass.Dual[=>:, x, I, ->:]
+     with SymmetricMonoidalCategoryClass.Dual[=>:, x, I]
+     with CocartesianCoclosedCategoryClass[λ[(a, b) => b =>: a], x, I, ->:] {
+    override def primal: CartesianClosedCategoryClass[=>:, x, I, ->:]
+    override def dual = primal
   }
-  case class Sequence[=>:[_,_], x[_,_], I, ->:[_,_], A, B](fs: AList1[FreeCCC[=>:, x, I, ->:, ?, ?], A, B]) extends FreeCCC[=>:, x, I, ->:, A, B] {
-    private type ==>[X, Y] = FreeCCC[=>:, x, I, ->:, X, Y]
-    private def id[X](): X ==> X = Id()
+}
 
-    def split: APair[A ==> ?, ? ==> B] = fs.tail match {
-      case ev @ ANil() => APair.of[A ==> ?, ? ==> B](fs.head, ev.subst[fs.Pivot ==> ?](id[fs.Pivot]()))
-      case ACons(h, t) => APair.of[A ==> ?, ? ==> B](fs.head, Sequence(ACons1(h, t)))
+/** Category with finite products, exponentials and a parameterized fixed point operator. */
+trait PFixClosedCategoryClass[=>:[_,_], x[_,_], I, ->:[_,_]]
+extends CartesianClosedCategoryClass[=>:, x, I, ->:]
+   with TracedMonoidalCategoryClass[=>:, x, I]
+   with PFixCategoryClass[=>:, x, I] {
+
+  override def dual: WhileCoclosedCategoryClass[λ[(a, b) => b =>: a], x, I, ->:] =
+    new PFixClosedCategoryClass.Dual[=>:, x, I, ->:] {
+      def primal = PFixClosedCategoryClass.this
     }
 
-    def visit[R](v: Visitor[R]): R = v.caseSequence(fs)
-  }
-  case class Id[=>:[_,_], x[_,_], I, ->:[_,_], A]() extends FreeCCC[=>:, x, I, ->:, A, A] {
-    def visit[R](v: Visitor[R]): R = v.caseId()
-  }
-  case class Fst[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, A x B, A] {
-    def visit[R](v: Visitor[R]): R = v.caseFst[B]()
-  }
-  case class Snd[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, A x B, B] {
-    def visit[R](v: Visitor[R]): R = v.caseSnd[A]()
-  }
-  case class Prod[=>:[_,_], x[_,_], I, ->:[_,_], A, B, C](f: FreeCCC[=>:, x, I, ->:, A, B], g: FreeCCC[=>:, x, I, ->:, A, C]) extends FreeCCC[=>:, x, I, ->:, A, B x C] {
-    def visit[R](v: Visitor[R]): R = v.caseProd(f, g)
-  }
-  case class Terminal[=>:[_,_], x[_,_], I, ->:[_,_], A]() extends FreeCCC[=>:, x, I, ->:, A, I] {
-    def visit[R](v: Visitor[R]): R = v.caseTerminal()
-  }
-  case class Curry[=>:[_,_], x[_,_], I, ->:[_,_], A, B, C](f: FreeCCC[=>:, x, I, ->:, A x B, C]) extends FreeCCC[=>:, x, I, ->:, A, B ->: C] {
-    def visit[R](v: Visitor[R]): R = v.caseCurry(f)
-  }
-  case class Eval[=>:[_,_], x[_,_], I, ->:[_,_], A, B]() extends FreeCCC[=>:, x, I, ->:, (A ->: B) x A, B] {
-    def visit[R](v: Visitor[R]): R = v.caseEval[A]()
-  }
+  override def tr[X, A, B](f: (A x X) =>: (B x X)): (A =>: B) = pfixTr(f)
+}
 
-  trait Visitor[=>:[_,_], x[_,_], I, ->:[_,_], A, B, R] {
-    def caseWrap(f: A =>: B): R
-    def caseSequence(fs: AList1[FreeCCC[=>:, x, I, ->:, ?, ?], A, B]): R
-    def caseId()(implicit ev: A === B): R
-    def caseFst[A2]()(implicit ev: A === (B x A2)): R
-    def caseSnd[A1]()(implicit ev: A === (A1 x B)): R
-    def caseProd[B1, B2](f: FreeCCC[=>:, x, I, ->:, A, B1], g: FreeCCC[=>:, x, I, ->:, A, B2])(implicit ev: (B1 x B2) === B): R
-    def caseTerminal()(implicit ev: I === B): R
-    def caseCurry[B1, B2](f: FreeCCC[=>:, x, I, ->:, A x B1, B2])(implicit ev: (B1 ->: B2) === B): R
-    def caseEval[A0]()(implicit ev: A === ((A0 ->: B) x A0)): R
+object PFixClosedCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, ->:[_,_]]
+  extends CartesianClosedCategoryClass.Dual[=>:, x, I, ->:]
+     with PFixCategoryClass.Dual[=>:, x, I]
+     with WhileCoclosedCategoryClass[λ[(a, b) => b =>: a], x, I, ->:] {
+    override def primal: PFixClosedCategoryClass[=>:, x, I, ->:]
+    override def dual = primal
   }
 }
 
-sealed trait SuperFreeCCC[=>:[_,_], A, B] {
-  def apply[x[_,_], I, ->:[_,_]]: FreeCCC[=>:, x, I, ->:, A, B]
-}
+trait CocartesianCoclosedCategoryClass[=>:[_,_], v[_,_], O, <-:[_, _]]
+extends CocartesianCategoryClass[=>:, v, O]
+   with CoclosedMonoidalCategoryClass[=>:, v, O, <-:]
+   with SymmetricMonoidalCategoryClass[=>:, v, O] {
 
-trait FunModule {
-  type Fun[A, B]
-}
-
-object FunImpl extends FunModule {
-  type Fun[A, B] = FreeCCC[Function1, Tuple2, Unit, Function1, A, B]
-}
-
-trait RecFunModule {
-  type RecFun[A, B]
-
-  def eval[A, B](f: RecFun[A, B], a: A): B
-}
-
-private[typeclass] object RecFunImpl extends RecFunModule {
-  import scalaz.data._
-
-  trait AFixModule {
-    type AFix[F[_[_, _], _, _], A, B]
-
-    def fix  [F[_[_, _], _, _], A, B](f: F[RecFunImpl.AFix[F, ?, ?], A, B]):          AFix[F, A, B]
-    def unfix[F[_[_, _], _, _], A, B](f:          AFix[F, A, B]       ): F[RecFunImpl.AFix[F, ?, ?], A, B]
-  }
-
-  object AFixImpl extends AFixModule {
-    type AFix[F[_[_, _], _, _], A, B] = F[RecFunImpl.AFix[F, ?, ?], A, B]
-
-    def fix  [F[_[_, _], _, _], A, B](f: F[RecFunImpl.AFix[F, ?, ?], A, B]):          AFix[F, A, B]        = f
-    def unfix[F[_[_, _], _, _], A, B](f:          AFix[F, A, B]       ): F[RecFunImpl.AFix[F, ?, ?], A, B] = f
-  }
-
-  val AFix: AFixModule = AFixImpl
-  type AFix[F[_[_, _], _, _], A, B] = AFix.AFix[F, A, B]
-
-  type Fun[A, B] = FreeCCC[Function1, Tuple2, Unit, Function1, A, B]
-
-  type Rec[=>:[_,_], A, B] = A =>: (A =>: B) =>: B
-
-  type RecFunF[F[_,_], α, β] = FreeCCC[λ[(a, b) => Function1[a, b] \/ Rec[F, a, b]], Tuple2, Unit, F, α, β]
-  type RecFun[A, B] = AFix[RecFunF, A, B]
-  type =>:[A, B] = RecFun[A, B]
-  type ->[A, B] = Function1[A, B] \/ Rec[RecFun, A, B]
-  type ==>:[A, B] = FreeCCC[->, Tuple2, Unit, RecFun, A, B]
-
-  def fix[A, B](f: A ==>: B): A =>: B = AFix.fix[RecFunF, A, B](f)
-  def unfix[A, B](f: A =>: B): A ==>: B = AFix.unfix[RecFunF, A, B](f)
-
-  def eval[A, B](f: A =>: B, a: A): B =
-    EvalApp(a, f, Done[B](_)).run
-
-  private sealed trait Evaluator[R] {
-    final def run: R = Evaluator.run(this)
-  }
-
-  private case class Done[R](r: R) extends Evaluator[R]
-  private case class FlatMap[A, B](a: Evaluator[A], f: A => Evaluator[B]) extends Evaluator[B]
-  private case class EvalApp[A, B, R](a: A, φ: A =>: B, f: B => Evaluator[R]) extends Evaluator[R] {
-    def step: Evaluator[R] = {
-      val φ1 = AFix.unfix(φ)
-      φ1.visit(new φ1.Visitor[Evaluator[R]] {
-        import FreeCCC._
-
-        override def caseWrap(ψ: A -> B) = ψ match {
-          case -\/(g) => f(g(a))
-          case \/-(ξ) => EvalApp[A, (A =>: B) =>: B, R](a, ξ, γ => EvalApp(φ, γ, f))
-        }
-        override def caseId()(implicit ev: A === B) = f(ev(a))
-        override def caseFst[A2]()(implicit ev: A === (B, A2)) = f(ev(a)._1)
-        override def caseSnd[A1]()(implicit ev: A === (A1, B)) = f(ev(a)._2)
-        override def caseTerminal()(implicit ev: Unit === B) = f(ev(()))
-        override def caseProd[B1, B2](σ: A ==>: B1, τ: A ==>: B2)(implicit ev: (B1, B2) === B) =
-          EvalApp[A, B1, R](a, fix(σ), b1 => EvalApp[A, B2, R](a, fix(τ), b2 => f(ev((b1, b2)))))
-        override def caseCurry[B1, B2](ψ: (A, B1) ==>: B2)(implicit ev: (B1 =>: B2) === B) =
-          f(ev(fix(ψ compose Wrap[->, Tuple2, Unit, RecFun, B1, (A, B1)](-\/(b1 => (a, b1))))))
-        override def caseEval[A0]()(implicit ev: A === (A0 =>: B, A0)) = {
-          val (g, a0) = ev(a)
-          EvalApp(a0, g, f)
-        }
-        override def caseSequence(φs: AList1[==>:, A, B]) = φs.tail match {
-          case ev @ ANil() => EvalApp(a, fix(ev.subst[A ==>: ?](φs.head)), f)
-          case ACons(h, t) => EvalApp(a, fix(φs.head), (x: φs.Pivot) => EvalApp(x, fix(Sequence(ACons1(h, t))), f))
-        }
-      })
+  override def coproductMonoidalStructure = this
+  override def dual: CartesianClosedCategoryClass[λ[(a, b) => b =>: a], v, O, <-:] =
+    new CocartesianCoclosedCategoryClass.Dual[=>:, v, O, <-:] {
+      def primal = CocartesianCoclosedCategoryClass.this
     }
-  }
+}
 
-  private object Evaluator {
-    @annotation.tailrec
-    final def run[R](e: Evaluator[R]): R = e match {
-      case Done(r) => r
-      case FlatMap(a, f) => a match {
-        case Done(a) => run(f(a))
-        case FlatMap(a, g) => run(FlatMap(a, g andThen f))
-        case EvalApp(a, φ, g) => run(EvalApp(a, φ, g andThen f))
-      }
-      case e @ EvalApp(_, _, _) => run(e.step)
+object CocartesianCoclosedCategoryClass {
+
+  trait Dual[=>:[_,_], v[_,_], O, <-:[_, _]]
+  extends CocartesianCategoryClass.Dual[=>:, v, O]
+     with CoclosedMonoidalCategoryClass.Dual[=>:, v, O, <-:]
+     with SymmetricMonoidalCategoryClass.Dual[=>:, v, O]
+     with CartesianClosedCategoryClass[λ[(a, b) => b =>: a], v, O, <-:] {
+    override def primal: CocartesianCoclosedCategoryClass[=>:, v, O, <-:]
+    override def dual = primal
+  }
+}
+
+trait WhileCoclosedCategoryClass[=>:[_,_], v[_,_], O, <-:[_,_]]
+extends CocartesianCoclosedCategoryClass[=>:, v, O, <-:]
+   with TracedMonoidalCategoryClass[=>:, v, O]
+   with WhileCategoryClass[=>:, v, O] {
+
+  override def dual: PFixClosedCategoryClass[λ[(a, b) => b =>: a], v, O, <-:] =
+    new WhileCoclosedCategoryClass.Dual[=>:, v, O, <-:] {
+      def primal = WhileCoclosedCategoryClass.this
     }
+
+  override def tr[X, A, B](f: (A v X) =>: (B v X)): (A =>: B) = whileTr(f)
+}
+
+object WhileCoclosedCategoryClass {
+
+  trait Dual[=>:[_,_], v[_,_], O, <-:[_,_]]
+  extends CocartesianCoclosedCategoryClass.Dual[=>:, v, O, <-:]
+     with WhileCategoryClass.Dual[=>:, v, O]
+     with PFixClosedCategoryClass[λ[(a, b) => b =>: a], v, O, <-:] {
+
+    override def primal: WhileCoclosedCategoryClass[=>:, v, O, <-:]
+    override def dual = primal
+  }
+}
+
+/** A category that is both cartesian closed and co-cartesian. */
+trait BiCartesianClosedCategoryClass[=>:[_,_], x[_,_], I, v[_,_], O, ->:[_, _]]
+  extends CartesianClosedCategoryClass[=>:, x, I, ->:]
+     with BiCartesianCategoryClass[=>:, x, I, v, O] {
+
+  override def dual: BiCartesianCoclosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, ->:] =
+    new BiCartesianClosedCategoryClass.Dual[=>:, x, I, v, O, ->:] {
+      def primal = BiCartesianClosedCategoryClass.this
+    }
+}
+
+object BiCartesianClosedCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, v[_,_], O, ->:[_, _]]
+  extends CartesianClosedCategoryClass.Dual[=>:, x, I, ->:]
+     with BiCartesianCategoryClass.Dual[=>:, x, I, v, O]
+     with BiCartesianCoclosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, ->:] {
+    override def primal: BiCartesianClosedCategoryClass[=>:, x, I, v, O, ->:]
+    override def dual = primal
+  }
+}
+
+/** Category with finite products, finite coproducts, exponentials and a while loop. */
+trait WhileCartesianClosedCategoryClass[=>:[_,_], x[_,_], I, v[_,_], O, ->:[_, _]]
+extends BiCartesianClosedCategoryClass[=>:, x, I, v, O, ->:]
+   with WhileCategoryClass[=>:, v, O] {
+
+  override def dual: PFixCocartesianCoclosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, ->:] =
+    new WhileCartesianClosedCategoryClass.Dual[=>:, x, I, v, O, ->:] {
+      def primal = WhileCartesianClosedCategoryClass.this
+    }
+}
+
+object WhileCartesianClosedCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, v[_,_], O, ->:[_, _]]
+  extends BiCartesianClosedCategoryClass.Dual[=>:, x, I, v, O, ->:]
+     with WhileCategoryClass.Dual[=>:, v, O]
+     with PFixCocartesianCoclosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, ->:] {
+    override def primal: WhileCartesianClosedCategoryClass[=>:, x, I, v, O, ->:]
+    override def dual = primal
+  }
+}
+
+/** A category that is both co-cartesian co-closed and cartesian. */
+trait BiCartesianCoclosedCategoryClass[=>:[_,_], x[_,_], I, v[_,_], O, <-:[_, _]]
+  extends CocartesianCoclosedCategoryClass[=>:, v, O, <-:]
+     with BiCartesianCategoryClass[=>:, x, I, v, O] {
+
+  override def dual: BiCartesianClosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, <-:] =
+    new BiCartesianCoclosedCategoryClass.Dual[=>:, x, I, v, O, <-:] {
+      def primal = BiCartesianCoclosedCategoryClass.this
+    }
+}
+
+object BiCartesianCoclosedCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, v[_,_], O, <-:[_, _]]
+  extends CocartesianCoclosedCategoryClass.Dual[=>:, v, O, <-:]
+     with BiCartesianCategoryClass.Dual[=>:, x, I, v, O]
+     with BiCartesianClosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, <-:] {
+    override def primal: BiCartesianCoclosedCategoryClass[=>:, x, I, v, O, <-:]
+    override def dual = primal
+  }
+}
+
+trait PFixCocartesianCoclosedCategoryClass[=>:[_,_], x[_,_], I, v[_,_], O, <-:[_, _]]
+extends BiCartesianCoclosedCategoryClass[=>:, x, I, v, O, <-:]
+   with PFixCategoryClass[=>:, x, I] {
+
+  override def dual: WhileCartesianClosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, <-:] =
+    new PFixCocartesianCoclosedCategoryClass.Dual[=>:, x, I, v, O, <-:] {
+      def primal = PFixCocartesianCoclosedCategoryClass.this
+    }
+}
+
+object PFixCocartesianCoclosedCategoryClass {
+
+  trait Dual[=>:[_,_], x[_,_], I, v[_,_], O, <-:[_, _]]
+  extends BiCartesianCoclosedCategoryClass.Dual[=>:, x, I, v, O, <-:]
+     with PFixCategoryClass.Dual[=>:, x, I]
+     with WhileCartesianClosedCategoryClass[λ[(a, b) => b =>: a], v, O, x, I, <-:] {
+    override def primal: PFixCocartesianCoclosedCategoryClass[=>:, x, I, v, O, <-:]
+    override def dual = primal
   }
 }
