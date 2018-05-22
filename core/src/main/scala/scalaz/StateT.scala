@@ -125,7 +125,7 @@ sealed abstract class IndexedStateT[-S1, F[_], S2, A] { self =>
 
   def unliftId[M[_], S <: S1](implicit M: Comonad[M], F: Bind[M], ev: this.type <~< IndexedStateT[S, M, S2, A]): IndexedState[S, S2, A] = unlift[M, Id, S]
 
-  def rwst[W, R](implicit F: Bind[F], W: Monoid[W]): IndexedReaderWriterStateT[F, R, W, S1, S2, A] =
+  def rwst[W, R](implicit F: Bind[F], W: Monoid[W]): IndexedReaderWriterStateT[R, W, S1, S2, F, A] =
     IndexedReaderWriterStateT(
       (r, s) => F.map(run(s)) {
         case (s, a) => (W.zero, a, s)
